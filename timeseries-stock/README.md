@@ -115,7 +115,7 @@ Edit `config/default.yaml` to customize:
 ### Data Settings
 ```yaml
 data:
-  input_csv: "data/raw/AAPL.csv"
+  input_csv: "data/raw/SAMPLE.csv"
   target: "direction"  # or "return"
 ```
 
@@ -150,7 +150,7 @@ train:
 ### Example 1: Classification (Direction Prediction)
 ```bash
 python -m src.train --config config/default.yaml \
-  data.input_csv=data/raw/AAPL.csv \
+  data.input_csv=data/raw/SAMPLE.csv \
   train.task=classification \
   data.target=direction
 ```
@@ -160,7 +160,7 @@ python -m src.train --config config/default.yaml \
 ### Example 2: Regression (Return Prediction)
 ```bash
 python -m src.train --config config/default.yaml \
-  data.input_csv=data/raw/AAPL.csv \
+  data.input_csv=data/raw/SAMPLE.csv \
   train.task=regression \
   data.target=return
 ```
@@ -292,7 +292,7 @@ The pipeline includes clean extension points for sentiment data:
 # In src/train.py (future integration)
 from src.sentiment_stub import load_daily_sentiment
 
-sent_df = load_daily_sentiment(df.index, ticker='AAPL')
+sent_df = load_daily_sentiment(df.index, ticker='^GSPC')
 df_feat = build_stock_features(df, cfg['features'], sent_df=sent_df)
 ```
 

@@ -65,13 +65,13 @@ Place your OHLCV CSV file in `data/raw/`:
 ```bash
 # Example: download stock data
 # (You'll need to get this from Yahoo Finance, Alpha Vantage, etc.)
-cp /path/to/your/AAPL.csv data/raw/AAPL.csv
+cp /path/to/your/SP500.csv data/raw/SP500.csv
 ```
 
 Update `config/default.yaml`:
 ```yaml
 data:
-  input_csv: "data/raw/AAPL.csv"  # Update this path
+  input_csv: "data/raw/SP500.csv"  # Update this path
 ```
 
 ### 6. Train Your First Model
@@ -230,8 +230,8 @@ docker run -v $(pwd)/data:/app/data -v $(pwd)/artifacts:/app/artifacts timeserie
    ```
    ```python
    import yfinance as yf
-   df = yf.download('AAPL', start='2020-01-01', end='2023-12-31')
-   df.to_csv('data/raw/AAPL.csv')
+   df = yf.download('^GSPC', start='2020-01-01', end='2023-12-31')
+   df.to_csv('data/raw/SP500.csv')
    ```
 
 2. **Alpha Vantage** (free API key required)

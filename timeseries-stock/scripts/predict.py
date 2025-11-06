@@ -2,7 +2,7 @@
 Example script for loading a trained model and making predictions.
 
 Usage:
-    python scripts/predict.py --model artifacts/model_20250105_123456.pt --data data/raw/AAPL.csv
+    python scripts/predict.py --model artifacts/model_20250105_123456.pt --data data/raw/SP500.csv
 """
 
 import argparse

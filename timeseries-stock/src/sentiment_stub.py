@@ -30,8 +30,8 @@ def load_daily_sentiment(dates: pd.DatetimeIndex, ticker: str = None,
             - sent_positive: Binary indicator if sentiment > 0
     
     Example:
-        # In train.py:
-        sent_df = load_daily_sentiment(df.index)
+        # In features.py build_stock_features():
+        sent_df = load_daily_sentiment(df.index, ticker='^GSPC')
         df_feat = build_stock_features(df, cfg, sent_df=sent_df)
     """
     import os
@@ -163,7 +163,7 @@ INTEGRATION GUIDE
    from src.sentiment_stub import load_daily_sentiment
    
    # Load sentiment
-   sent_df = load_daily_sentiment(df.index, ticker='AAPL')
+   sent_df = load_daily_sentiment(df.index, ticker='^GSPC')
    
    # Pass to feature builder
    df_feat = build_stock_features(df, cfg['features'], sent_df=sent_df)
