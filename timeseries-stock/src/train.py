@@ -12,6 +12,7 @@ from src.features import build_stock_features, make_targets, drop_warmup_rows, g
 from src.windows import make_sliding_windows, validate_window_shapes
 from src.dataset import create_dataloaders
 from src.models import create_model
+from src.sentiment_stub import load_daily_sentiment
 from src.utils import (
     set_seed, load_config, save_config, time_split,
     standardize_features, compute_classification_metrics,
@@ -127,7 +128,20 @@ def main(config_path, overrides=None):
     
     # ========== 2. Build Features ==========
     print("\n[2/9] Building features...")
-    df_feat = build_stock_features(df, cfg['features'])
+    
+    # Load sentiment data if enabled
+    sent_df = None
+    if cfg.get('sentiment', {}).get('enabled', False):
+        print("Loading sentiment data...")
+        sent_csv_path = cfg['sentiment'].get('csv_path', 'data/raw/Daily News Sentiment Index.csv')
+        sent_df = load_daily_sentiment(df.index, csv_path=sent_csv_path)
+        if len(sent_df) > 0:
+            print(f"✓ Sentiment features will be added ({len(sent_df.columns)} features)")
+        else:
+            print("⚠ Warning: No sentiment data matched stock dates")
+            sent_df = None
+    
+    df_feat = build_stock_features(df, cfg['features'], sent_df=sent_df)
     
     # ========== 3. Create Targets ==========
     print("\n[3/9] Creating targets...")

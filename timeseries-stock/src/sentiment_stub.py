@@ -10,51 +10,63 @@ import pandas as pd
 from typing import List
 
 
-def load_daily_sentiment(dates: pd.DatetimeIndex, ticker: str = None) -> pd.DataFrame:
+def load_daily_sentiment(dates: pd.DatetimeIndex, ticker: str = None, 
+                         csv_path: str = "data/raw/Daily News Sentiment Index.csv") -> pd.DataFrame:
     """
     Load daily sentiment data for given dates.
     
     Args:
         dates: DatetimeIndex of trading days to fetch sentiment for
         ticker: Optional ticker symbol (for ticker-specific sentiment)
+        csv_path: Path to sentiment CSV file
     
     Returns:
         DataFrame with DatetimeIndex and sentiment columns:
-            - sent_mean: Mean sentiment score (-1 to 1)
-            - sent_std: Std of sentiment scores
-            - pos_ratio: Ratio of positive sentiments
-            - neg_ratio: Ratio of negative sentiments
-            - fear: Fear index (0 to 1)
-            - joy: Joy index (0 to 1)
-            - volume: Number of sentiment data points
+            - sent_raw: Raw sentiment score from CSV
+            - sent_ma_5: 5-day moving average of sentiment
+            - sent_ma_20: 20-day moving average of sentiment
+            - sent_std_20: 20-day rolling std of sentiment
+            - sent_change: Day-over-day sentiment change
+            - sent_positive: Binary indicator if sentiment > 0
     
     Example:
-        # In features.py build_stock_features():
-        sent_df = load_daily_sentiment(df.index, ticker='AAPL')
+        # In train.py:
+        sent_df = load_daily_sentiment(df.index)
         df_feat = build_stock_features(df, cfg, sent_df=sent_df)
-    
-    TODO: Implement actual sentiment loading:
-        - Option 1: Load from pre-computed CSV
-        - Option 2: Fetch from sentiment API (Twitter, Reddit, news)
-        - Option 3: Compute from raw text data
     """
-    # Placeholder: return neutral sentiment for all dates
-    sentiment_data = {
-        'sent_mean': 0.0,
-        'sent_std': 0.0,
-        'pos_ratio': 0.5,
-        'neg_ratio': 0.5,
-        'fear': 0.0,
-        'joy': 0.0,
-        'volume': 0,
-    }
+    import os
     
-    df = pd.DataFrame(sentiment_data, index=dates)
+    # Check if file exists
+    if not os.path.exists(csv_path):
+        print(f"Warning: Sentiment file not found at {csv_path}")
+        print(f"  Returning empty sentiment DataFrame")
+        return pd.DataFrame(index=dates)
     
-    print(f"Warning: Using placeholder sentiment data for {len(dates)} days")
-    print("  Implement load_daily_sentiment() to use real sentiment data")
+    # Load sentiment CSV
+    sent_raw = pd.read_csv(csv_path)
     
-    return df
+    # Parse dates (format: M/D/YY)
+    sent_raw['date'] = pd.to_datetime(sent_raw['date'], format='%m/%d/%y')
+    sent_raw = sent_raw.set_index('date').sort_index()
+    
+    # Rename column for clarity
+    sent_raw = sent_raw.rename(columns={'News Sentiment': 'sent_raw'})
+    
+    # Create derived sentiment features
+    sent_raw['sent_ma_5'] = sent_raw['sent_raw'].rolling(window=5, min_periods=1).mean()
+    sent_raw['sent_ma_20'] = sent_raw['sent_raw'].rolling(window=20, min_periods=1).mean()
+    sent_raw['sent_std_20'] = sent_raw['sent_raw'].rolling(window=20, min_periods=1).std()
+    sent_raw['sent_change'] = sent_raw['sent_raw'].diff()
+    sent_raw['sent_positive'] = (sent_raw['sent_raw'] > 0).astype(int)
+    
+    # Align with requested dates (inner join - only keep matching dates)
+    sent_aligned = sent_raw.loc[sent_raw.index.isin(dates)]
+    
+    print(f"✓ Loaded sentiment data: {len(sent_aligned)}/{len(dates)} days matched")
+    print(f"  Sentiment range: [{sent_aligned['sent_raw'].min():.3f}, {sent_aligned['sent_raw'].max():.3f}]")
+    print(f"  Mean sentiment: {sent_aligned['sent_raw'].mean():.3f}")
+    
+    return sent_aligned
 
 
 def aggregate_sentiment_to_daily(

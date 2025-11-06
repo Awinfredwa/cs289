@@ -6,6 +6,10 @@ data:
   prediction_horizon: 1  # days ahead to predict (1=next day, 5=next week)
   cache_processed: true
 
+sentiment:
+  enabled: true  # Set to true to include sentiment features
+  csv_path: "data/raw/Daily News Sentiment Index.csv"
+
 features:
   rsi_period: 14
   roll_means: [5, 10, 20]  # Added 20-day for weekly trends
