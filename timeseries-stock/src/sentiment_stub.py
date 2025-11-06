@@ -24,10 +24,8 @@ def load_daily_sentiment(dates: pd.DatetimeIndex, ticker: str = None,
         DataFrame with DatetimeIndex and sentiment columns:
             - sent_raw: Raw sentiment score from CSV
             - sent_ma_5: 5-day moving average of sentiment
-            - sent_ma_20: 20-day moving average of sentiment
             - sent_std_20: 20-day rolling std of sentiment
             - sent_change: Day-over-day sentiment change
-            - sent_positive: Binary indicator if sentiment > 0
     
     Example:
         # In features.py build_stock_features():
@@ -52,12 +50,11 @@ def load_daily_sentiment(dates: pd.DatetimeIndex, ticker: str = None,
     # Rename column for clarity
     sent_raw = sent_raw.rename(columns={'News Sentiment': 'sent_raw'})
     
-    # Create derived sentiment features
+    # Create derived sentiment features (reduced redundancy)
     sent_raw['sent_ma_5'] = sent_raw['sent_raw'].rolling(window=5, min_periods=1).mean()
-    sent_raw['sent_ma_20'] = sent_raw['sent_raw'].rolling(window=20, min_periods=1).mean()
     sent_raw['sent_std_20'] = sent_raw['sent_raw'].rolling(window=20, min_periods=1).std()
     sent_raw['sent_change'] = sent_raw['sent_raw'].diff()
-    sent_raw['sent_positive'] = (sent_raw['sent_raw'] > 0).astype(int)
+    # Dropped: sent_ma_20 (redundant with sent_ma_5), sent_positive (constant/low info)
     
     # Align with requested dates (inner join - only keep matching dates)
     sent_aligned = sent_raw.loc[sent_raw.index.isin(dates)]

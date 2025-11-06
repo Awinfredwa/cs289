@@ -16,6 +16,7 @@ Given daily OHLCV (Open, High, Low, Close, Volume) historical data, this system:
 ### Current (v0)
 - ✅ OHLCV data ingestion from CSV
 - ✅ Technical feature engineering (returns, RSI, MACD, rolling stats)
+- ✅ **Optimized feature set** with redundancy reduction (correlation-based pruning)
 - ✅ Sliding window construction with configurable window size
 - ✅ LSTM and 1D-CNN model implementations
 - ✅ Time-aware train/val/test splitting (no data leakage)
@@ -25,13 +26,14 @@ Given daily OHLCV (Open, High, Low, Close, Volume) historical data, this system:
 - ✅ Comprehensive metrics (accuracy, F1, MAE, RMSE, etc.)
 - ✅ Configurable via YAML
 - ✅ CLI with parameter overrides
+- ✅ Optional sentiment data integration
 
 ### Future Extensions
-- 📊 Sentiment data integration (Twitter, Reddit, news)
+- 📊 Advanced sentiment data sources (Twitter, Reddit, real-time news)
 - 📈 Multi-ticker support
 - 🎯 Advanced models (Transformers, GRU)
 - 💹 Backtesting framework
-- 📉 Feature importance analysis
+- 📉 Feature importance analysis (SHAP, permutation importance)
 
 ## Project Structure
 
@@ -243,21 +245,29 @@ python tests/test_features.py
 **Returns:**
 - `close_ret_1`: 1-day close return
 
-**Rolling Statistics:**
-- `roll_mean_5`, `roll_mean_10`: Moving averages
-- `roll_std_5`, `roll_std_10`: Moving standard deviations
+**Rolling Statistics (Reduced Redundancy):**
+- `roll_mean_5`: Short-term moving average (5-day)
+- `roll_mean_20`: Medium-term moving average (20-day)
+- `roll_std_10`: Mid-range volatility (10-day)
 
 **Momentum:**
 - `rsi_14`: Relative Strength Index (14-day)
 
-**MACD:**
+**MACD (Reduced Redundancy):**
 - `macd`: MACD line (12-26 EMA difference)
-- `macd_signal`: Signal line (9-day EMA of MACD)
-- `macd_hist`: MACD histogram
+- `macd_hist`: MACD histogram (divergence from signal)
 
-**Volume:**
-- `vol_roll_mean_5`, `vol_roll_mean_20`: Volume moving averages
-- `vol_zscore_5`, `vol_zscore_20`: Volume z-scores
+**Volume (Reduced Redundancy):**
+- `vol_roll_mean_20`: Volume moving average (20-day)
+- `vol_zscore_20`: Volume z-score (20-day)
+
+**Sentiment (Optional, Reduced Redundancy):**
+- `sent_raw`: Raw daily sentiment score
+- `sent_ma_5`: 5-day sentiment moving average
+- `sent_std_20`: 20-day sentiment volatility
+- `sent_change`: Day-over-day sentiment change
+
+> **Note:** Features have been optimized to reduce multicollinearity. Highly correlated features (correlation ≥ 0.99) were removed to improve model generalization and reduce overfitting.
 
 ### Time-Series Windowing
 
@@ -284,19 +294,36 @@ Days 2-8   → Predict day 9
 - Fit `StandardScaler` on training data only
 - Transform val/test using training statistics
 
-## Sentiment Extension (Future)
+## Sentiment Data Integration
 
-The pipeline includes clean extension points for sentiment data:
+The pipeline includes built-in support for sentiment data with an optimized feature set:
+
+### Enabling Sentiment Features
+
+```yaml
+# In config/default.yaml
+sentiment:
+  enabled: true
+  csv_path: "data/raw/Daily News Sentiment Index.csv"
+```
+
+### Using Sentiment in Training
 
 ```python
-# In src/train.py (future integration)
+# In src/train.py (automatic when sentiment.enabled=true)
 from src.sentiment_stub import load_daily_sentiment
 
 sent_df = load_daily_sentiment(df.index, ticker='^GSPC')
 df_feat = build_stock_features(df, cfg['features'], sent_df=sent_df)
 ```
 
-See `src/sentiment_stub.py` for integration guide and placeholder functions.
+### Sentiment Features (Optimized)
+- `sent_raw`: Daily sentiment score
+- `sent_ma_5`: 5-day moving average (captures short-term trends)
+- `sent_std_20`: 20-day volatility (measures sentiment stability)
+- `sent_change`: Day-over-day change (momentum signal)
+
+See `src/sentiment_stub.py` for integration guide and extension functions.
 
 ## Model Architecture
 
@@ -336,6 +363,26 @@ Sigmoid (classification) or Linear (regression)
 Output: (batch_size,)
 ```
 
+## Feature Redundancy Reduction
+
+The feature set has been optimized to eliminate highly correlated features (correlation ≥ 0.99) that provide redundant information:
+
+| **Feature Group** | **Original** | **Optimized** | **Rationale** |
+|-------------------|--------------|---------------|---------------|
+| Rolling means | 5, 10, 20 | 5, 20 | Dropped 10 (mid-point offers no unique signal) |
+| Rolling stds | 5, 10, 20 | 10 | Kept mid-range; 5/20 are highly correlated |
+| MACD | macd, macd_signal, macd_hist | macd, macd_hist | Signal is smoothed macd (redundant) |
+| Volume means | 5, 20, 50 | 20 | Dropped 5 (too noisy) and 50 (too smooth) |
+| Volume z-scores | 20, 50 | 20 | 50 is redundant with 20 |
+| Sentiment MA | 5, 20 | 5 | Dropped 20 (highly correlated with 5) |
+| Sentiment binary | sent_positive | ❌ Dropped | Constant feature (no information gain) |
+
+**Benefits:**
+- ✅ Reduced multicollinearity improves model stability
+- ✅ Faster training (fewer features)
+- ✅ Better generalization (less overfitting)
+- ✅ Easier interpretation (each feature adds unique information)
+
 ## Tips and Best Practices
 
 1. **Start with classification** (easier to interpret and often more robust)
@@ -345,6 +392,7 @@ Output: (batch_size,)
 5. **Monitor validation metrics** during training
 6. **Compare LSTM vs CNN** (CNN is often faster, LSTM captures sequential patterns better)
 7. **Scale up gradually** (start with small `hidden_size`, increase if underfitting)
+8. **Use optimized feature set** (reduced redundancy improves performance)
 
 ## Troubleshooting
 

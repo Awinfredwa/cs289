@@ -40,7 +40,7 @@ def build_stock_features(
     rsi = RSIIndicator(close=df['close'], window=rsi_period)
     df[f'rsi_{rsi_period}'] = rsi.rsi()
     
-    # 4. MACD
+    # 4. MACD (keep only histogram to avoid redundancy)
     macd_cfg = cfg['macd']
     macd = MACD(
         close=df['close'],
@@ -48,8 +48,8 @@ def build_stock_features(
         window_fast=macd_cfg['fast'],
         window_sign=macd_cfg['signal']
     )
+    # Keep only macd and macd_hist (signal is redundant with macd)
     df['macd'] = macd.macd()
-    df['macd_signal'] = macd.macd_signal()
     df['macd_hist'] = macd.macd_diff()
     
     # 5. Volume features

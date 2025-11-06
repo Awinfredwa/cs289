@@ -3,7 +3,7 @@ data:
   date_col: "date"
   cols: ["open", "high", "low", "close", "volume"]
   target: "direction"   # options: "direction" | "return"
-  prediction_horizon: 1  # days ahead to predict (1=next day, 5=next week)
+  prediction_horizon: 5  # days ahead to predict (1=next day, 5=next week)
   cache_processed: true
 
 sentiment:
@@ -12,16 +12,16 @@ sentiment:
 
 features:
   rsi_period: 14
-  roll_means: [5, 10, 20]  # Added 20-day for weekly trends
-  roll_stds: [5, 10, 20]   # Added 20-day for weekly volatility
+  roll_means: [5, 20]      # Keep short-term (5) and medium-term (20), drop redundant 10
+  roll_stds: [10]          # Keep mid-range volatility, drop 5 and 20 (highly correlated)
   macd:
     fast: 12
     slow: 26
     signal: 9
-  volume_windows: [5, 20]  # Added 50-day for longer-term volume trends
+  volume_windows: [20]     # Keep medium-term only, drop redundant 5 and 50
 
 window:
-  size: 10  # 20 days (4 weeks) look-back for weekly prediction
+  size: 20  # 20 days (4 weeks) look-back for weekly prediction
   stride: 1
 
 split:
@@ -38,12 +38,12 @@ model:
 
 train:
   epochs: 30
-  batch_size: 32
+  batch_size: 16
   lr: 0.001
   optimizer: "adam"
-  early_stop_patience: 7  # Slightly more patience for weekly prediction
+  early_stop_patience: 7 # Slightly more patience for weekly prediction
   task: "classification" # or "regression"
-  seed: 42
+  seed: 44
 
 paths:
   outdir: "artifacts/"

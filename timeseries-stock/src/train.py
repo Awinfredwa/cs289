@@ -164,7 +164,37 @@ def main(config_path, overrides=None):
     
     # Get feature columns
     feature_cols = get_feature_columns(df_feat)
-    print(f"Using {len(feature_cols)} features: {feature_cols}")
+    
+    # ========== Feature Summary ==========
+    print(f"\n{'='*70}")
+    print(f"FEATURE SUMMARY ({len(feature_cols)} total features)")
+    print(f"{'='*70}")
+    
+    # Categorize features
+    tech_features = [f for f in feature_cols if not f.startswith('sent_')]
+    sent_features = [f for f in feature_cols if f.startswith('sent_')]
+    
+    print(f"\n📊 Technical Features ({len(tech_features)}):")
+    for i, feat in enumerate(tech_features, 1):
+        values = df_feat[feat]
+        print(f"  {i:2d}. {feat:20s} | Mean: {values.mean():8.4f} | Std: {values.std():7.4f} | Range: [{values.min():7.3f}, {values.max():7.3f}]")
+    
+    if sent_features:
+        print(f"\n🎭 Sentiment Features ({len(sent_features)}):")
+        for i, feat in enumerate(sent_features, 1):
+            values = df_feat[feat]
+            print(f"  {i:2d}. {feat:20s} | Mean: {values.mean():8.4f} | Std: {values.std():7.4f} | Range: [{values.min():7.3f}, {values.max():7.3f}]")
+    else:
+        print(f"\n🎭 Sentiment Features: None (disabled)")
+    
+    # Show sample data
+    print(f"\n📋 Sample Feature Values (first 5 days after split):")
+    print(f"{'='*70}")
+    sample_data = train_df[feature_cols].head(5)
+    # Transpose for better readability
+    print(sample_data.T.to_string())
+    
+    print(f"\n{'='*70}\n")
     
     # Extract features and targets
     X_train = train_df[feature_cols].values
