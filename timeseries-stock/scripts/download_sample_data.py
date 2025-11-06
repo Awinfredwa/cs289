@@ -1,21 +1,30 @@
 #!/usr/bin/env python3
 """
-Download real stock data from Yahoo Finance and save to SAMPLE.csv.
+Download real stock data from Yahoo Finance and save to a CSV file.
 
-This script downloads AAPL (Apple) stock data for the period
-2020-01-01 to 2020-05-21 and saves it in the format expected by
-the training pipeline.
+This script downloads stock data for the specified ticker and period,
+and saves it in the format expected by the training pipeline.
+The output filename is automatically generated from the ticker symbol.
 """
 
 import yfinance as yf
 import pandas as pd
 from pathlib import Path
+import re
 
 # Configuration
-TICKER = 'AAPL'
+TICKER = '^GSPC'
 START_DATE = '2010-01-01'
 END_DATE = '2020-05-21'
-OUTPUT_FILE = Path(__file__).parent.parent / 'data' / 'raw' / 'SAMPLE.csv'
+
+# Generate output filename from ticker (remove special characters)
+def get_ticker_filename(ticker: str) -> str:
+    """Generate a safe filename from ticker symbol."""
+    # Remove special characters that aren't valid in filenames
+    safe_ticker = re.sub(r'[^\w\s-]', '', ticker)
+    return f"{safe_ticker}.csv"
+
+OUTPUT_FILE = Path(__file__).parent.parent / 'data' / 'raw' / get_ticker_filename(TICKER)
 
 
 def download_stock_data(ticker: str, start: str, end: str) -> pd.DataFrame:

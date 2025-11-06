@@ -30,7 +30,7 @@ def load_daily_sentiment(dates: pd.DatetimeIndex, ticker: str = None) -> pd.Data
     
     Example:
         # In features.py build_stock_features():
-        sent_df = load_daily_sentiment(df.index, ticker='AAPL')
+        sent_df = load_daily_sentiment(df.index, ticker='^GSPC')
         df_feat = build_stock_features(df, cfg, sent_df=sent_df)
     
     TODO: Implement actual sentiment loading:
@@ -151,7 +151,7 @@ INTEGRATION GUIDE
    from src.sentiment_stub import load_daily_sentiment
    
    # Load sentiment
-   sent_df = load_daily_sentiment(df.index, ticker='AAPL')
+   sent_df = load_daily_sentiment(df.index, ticker='^GSPC')
    
    # Pass to feature builder
    df_feat = build_stock_features(df, cfg['features'], sent_df=sent_df)

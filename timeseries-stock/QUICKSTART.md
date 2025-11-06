@@ -102,12 +102,12 @@ python -m src.train --config config/default.yaml \
 **Option A: Yahoo Finance (easiest)**
 ```bash
 pip install yfinance
-python -c "import yfinance as yf; yf.download('AAPL', start='2020-01-01').to_csv('data/raw/AAPL.csv')"
+python -c "import yfinance as yf; yf.download('^GSPC', start='2020-01-01').to_csv('data/raw/SP500.csv')"
 ```
 
 **Option B: Manual CSV**
 
-Create `data/raw/AAPL.csv`:
+Create `data/raw/SP500.csv`:
 ```csv
 date,open,high,low,close,volume
 2020-01-01,100.5,102.3,99.8,101.2,1500000
@@ -120,7 +120,7 @@ date,open,high,low,close,volume
 Edit `config/default.yaml`:
 ```yaml
 data:
-  input_csv: "data/raw/AAPL.csv"  # Your file
+  input_csv: "data/raw/SP500.csv"  # Your file
 ```
 
 ### Step 3: Train
