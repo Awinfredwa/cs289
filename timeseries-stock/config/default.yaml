@@ -16,7 +16,7 @@ features:
   volume_windows: [5, 20]
 
 window:
-  size: 7
+  size: 30
   stride: 1
 
 split:
@@ -27,12 +27,12 @@ split:
 
 model:
   type: "lstm"           # options: "lstm" | "cnn1d"
-  hidden_size: 64
+  hidden_size: 32
   num_layers: 1
-  dropout: 0.1
+  dropout: 0.3
 
 train:
-  epochs: 30
+  epochs: 20
   batch_size: 64
   lr: 0.001
   optimizer: "adam"
