@@ -38,7 +38,7 @@ model:
 
 train:
   epochs: 30
-  batch_size: 64
+  batch_size: 32
   lr: 0.001
   optimizer: "adam"
   early_stop_patience: 7  # Slightly more patience for weekly prediction

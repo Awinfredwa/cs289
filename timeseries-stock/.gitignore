@@ -39,11 +39,11 @@ wheels/
 *~
 .DS_Store
 
-# Data (don't commit large data files)
-data/raw/*.csv
-!data/raw/SAMPLE.csv
-data/interim/
-data/processed/
+# # Data (don't commit large data files)
+# data/raw/*.csv
+# !data/raw/SAMPLE.csv
+# data/interim/
+# data/processed/
 
 # Model artifacts
 artifacts/*
