@@ -1,0 +1,45 @@
+data:
+  input_csv: "data/raw/SAMPLE.csv"  # Use SAMPLE.csv for testing, replace with your data
+  date_col: "date"
+  cols: ["open", "high", "low", "close", "volume"]
+  target: "direction"   # options: "direction" | "return"
+  cache_processed: true
+
+features:
+  rsi_period: 14
+  roll_means: [5, 10]
+  roll_stds: [5, 10]
+  macd:
+    fast: 12
+    slow: 26
+    signal: 9
+  volume_windows: [5, 20]
+
+window:
+  size: 7
+  stride: 1
+
+split:
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+  chronological: true
+
+model:
+  type: "lstm"           # options: "lstm" | "cnn1d"
+  hidden_size: 64
+  num_layers: 1
+  dropout: 0.1
+
+train:
+  epochs: 30
+  batch_size: 64
+  lr: 0.001
+  optimizer: "adam"
+  early_stop_patience: 5
+  task: "classification" # or "regression"
+  seed: 42
+
+paths:
+  outdir: "artifacts/"
+
