@@ -131,7 +131,9 @@ def main(config_path, overrides=None):
     
     # ========== 3. Create Targets ==========
     print("\n[3/9] Creating targets...")
-    df_feat = make_targets(df_feat, mode=cfg['data']['target'])
+    horizon = cfg['data'].get('prediction_horizon', 1)
+    print(f"Prediction horizon: {horizon} days ({'next day' if horizon == 1 else f'next week' if horizon == 5 else f'{horizon} days ahead'})")
+    df_feat = make_targets(df_feat, mode=cfg['data']['target'], horizon=horizon)
     
     # ========== 4. Drop Warm-up Rows ==========
     print("\n[4/9] Dropping warm-up rows...")

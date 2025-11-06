@@ -78,13 +78,14 @@ def build_stock_features(
     return df
 
 
-def make_targets(df: pd.DataFrame, mode: str) -> pd.DataFrame:
+def make_targets(df: pd.DataFrame, mode: str, horizon: int = 1) -> pd.DataFrame:
     """
     Create target variable for prediction.
     
     Args:
         df: DataFrame with 'close' column
         mode: 'direction' or 'return'
+        horizon: Number of days ahead to predict (1=next day, 5=next week, etc.)
     
     Returns:
         DataFrame with target column added
@@ -92,18 +93,18 @@ def make_targets(df: pd.DataFrame, mode: str) -> pd.DataFrame:
     df = df.copy()
     
     if mode == 'direction':
-        # Binary: 1 if next-day close > today's close, else 0
-        df['target'] = (df['close'].shift(-1) > df['close']).astype(int)
+        # Binary: 1 if future close > today's close, else 0
+        df['target'] = (df['close'].shift(-horizon) > df['close']).astype(int)
     
     elif mode == 'return':
-        # Continuous: next-day return
-        df['target'] = df['close'].pct_change(1).shift(-1)
+        # Continuous: future return
+        df['target'] = (df['close'].shift(-horizon) / df['close']) - 1
     
     else:
         raise ValueError(f"Unknown target mode: {mode}. Choose 'direction' or 'return'.")
     
-    # Drop the last row (no target for last day)
-    df = df.iloc[:-1]
+    # Drop the last 'horizon' rows (no target for them)
+    df = df.iloc[:-horizon]
     
     return df
 
