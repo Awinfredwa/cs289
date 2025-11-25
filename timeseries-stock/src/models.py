@@ -45,11 +45,8 @@ class LSTMModel(nn.Module):
         # Fully connected output layer
         self.fc = nn.Linear(hidden_size, output_size)
         
-        # Activation for classification
-        if task == 'classification':
-            self.activation = nn.Sigmoid()
-        else:
-            self.activation = None
+        # No activation - CrossEntropyLoss expects raw logits
+        self.activation = None
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -72,11 +69,12 @@ class LSTMModel(nn.Module):
         # Fully connected layer
         out = self.fc(last_output)  # (batch_size, output_size)
         
-        # Apply activation for classification
-        if self.activation is not None:
-            out = self.activation(out)
-        
-        return out.squeeze(-1)  # (batch_size,)
+        # For binary classification with CrossEntropyLoss, return (batch, 2)
+        # For regression, squeeze to (batch,)
+        if self.task == 'classification' and out.shape[-1] > 1:
+            return out  # (batch_size, num_classes)
+        else:
+            return out.squeeze(-1)  # (batch_size,)
 
 
 class CNN1DModel(nn.Module):
@@ -124,11 +122,8 @@ class CNN1DModel(nn.Module):
         # Fully connected layer
         self.fc = nn.Linear(hidden_size * 2, output_size)
         
-        # Activation for classification
-        if task == 'classification':
-            self.activation = nn.Sigmoid()
-        else:
-            self.activation = None
+        # No activation - CrossEntropyLoss expects raw logits
+        self.activation = None
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -162,11 +157,12 @@ class CNN1DModel(nn.Module):
         # Fully connected
         out = self.fc(x)
         
-        # Apply activation for classification
-        if self.activation is not None:
-            out = self.activation(out)
-        
-        return out.squeeze(-1)  # (batch_size,)
+        # For binary classification with CrossEntropyLoss, return (batch, 2)
+        # For regression, squeeze to (batch,)
+        if self.task == 'classification' and out.shape[-1] > 1:
+            return out  # (batch_size, num_classes)
+        else:
+            return out.squeeze(-1)  # (batch_size,)
 
 
 def create_model(
@@ -191,12 +187,16 @@ def create_model(
     Returns:
         Model instance
     """
+    # For classification, use 2 output neurons (for CrossEntropyLoss)
+    # For regression, use 1 output neuron
+    output_size = 2 if task == 'classification' else 1
+    
     if model_type == 'lstm':
         return LSTMModel(
             input_size=input_size,
             hidden_size=hidden_size,
             num_layers=num_layers,
-            output_size=1,
+            output_size=output_size,
             dropout=dropout,
             task=task
         )
@@ -204,7 +204,7 @@ def create_model(
         return CNN1DModel(
             input_size=input_size,
             hidden_size=hidden_size,
-            output_size=1,
+            output_size=output_size,
             dropout=dropout,
             task=task
         )

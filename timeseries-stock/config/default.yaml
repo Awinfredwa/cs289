@@ -3,12 +3,18 @@ data:
   date_col: "date"
   cols: ["open", "high", "low", "close", "volume"]
   target: "direction"   # options: "direction" | "return"
-  prediction_horizon: 5  # days ahead to predict (1=next day, 5=next week)
+  prediction_horizon: 1  # For weekly: 1=next week, 2=2 weeks ahead, etc.
   cache_processed: true
+  use_weekly: true  # Resample to weekly frequency (recommended with Fear & Greed)
 
 sentiment:
-  enabled: true  # Set to true to include sentiment features
+  enabled: false  # Disable daily sentiment (doesn't align well with weekly data)
   csv_path: "data/raw/Daily News Sentiment Index.csv"
+
+fear_greed:
+  enabled: true  # Weekly Fear & Greed Index aligns perfectly with weekly stock data
+  csv_path: "data/raw/Fear and Greed Index Data.csv"
+  shift_days: 0  # No shift needed with weekly data
 
 features:
   rsi_period: 14
@@ -19,9 +25,10 @@ features:
     slow: 26
     signal: 9
   volume_windows: [20]     # Keep medium-term only, drop redundant 5 and 50
+  fill_warmup: true        # Forward-fill NaN from warm-up to use more data (recommended)
 
 window:
-  size: 20  # 20 days (4 weeks) look-back for weekly prediction
+  size: 8  # For weekly: 8 weeks (2 months) look-back
   stride: 1
 
 split:
@@ -31,7 +38,7 @@ split:
   chronological: true
 
 model:
-  type: "lstm"           # options: "lstm" | "cnn1d"
+  type: "cnn1d"          # CNN works well for pattern recognition in weekly data
   hidden_size: 32
   num_layers: 1
   dropout: 0.3
@@ -39,11 +46,11 @@ model:
 train:
   epochs: 30
   batch_size: 16
-  lr: 0.001
+  lr: 0.0001
   optimizer: "adam"
-  early_stop_patience: 7 # Slightly more patience for weekly prediction
+  early_stop_patience: 10 # Slightly more patience for weekly prediction
   task: "classification" # or "regression"
-  seed: 44
+  seed: 32
 
 paths:
   outdir: "artifacts/"

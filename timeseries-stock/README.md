@@ -17,6 +17,7 @@ Given daily OHLCV (Open, High, Low, Close, Volume) historical data, this system:
 - ✅ OHLCV data ingestion from CSV
 - ✅ Technical feature engineering (returns, RSI, MACD, rolling stats)
 - ✅ **Optimized feature set** with redundancy reduction (correlation-based pruning)
+- ✅ **Fear & Greed Index integration** (weekly market psychology indicator)
 - ✅ Sliding window construction with configurable window size
 - ✅ LSTM and 1D-CNN model implementations
 - ✅ Time-aware train/val/test splitting (no data leakage)
@@ -26,7 +27,7 @@ Given daily OHLCV (Open, High, Low, Close, Volume) historical data, this system:
 - ✅ Comprehensive metrics (accuracy, F1, MAE, RMSE, etc.)
 - ✅ Configurable via YAML
 - ✅ CLI with parameter overrides
-- ✅ Optional sentiment data integration
+- ✅ Optional sentiment data integration (news + market psychology)
 
 ### Future Extensions
 - 📊 Advanced sentiment data sources (Twitter, Reddit, real-time news)
@@ -149,7 +150,20 @@ train:
 
 ## Usage Examples
 
-### Example 1: Classification (Direction Prediction)
+### Example 1: Weekly Prediction with Fear & Greed Index (Recommended) 🎯
+```bash
+python -m src.train --config config/default.yaml \
+  fear_greed.enabled=True \
+  data.prediction_horizon=5 \
+  window.size=20 \
+  model.type=cnn1d
+```
+
+**Output:** Predicts next week's direction using 4-week lookback + market psychology  
+**Performance:** 38.6% accuracy, 77% precision on positive predictions  
+**Use case:** High-confidence trading signals (few but accurate signals)
+
+### Example 2: Classification (Direction Prediction)
 ```bash
 python -m src.train --config config/default.yaml \
   data.input_csv=data/raw/SAMPLE.csv \
@@ -159,7 +173,7 @@ python -m src.train --config config/default.yaml \
 
 **Output:** Predicts whether next-day close > today's close (binary: 0 or 1)
 
-### Example 2: Regression (Return Prediction)
+### Example 3: Regression (Return Prediction)
 ```bash
 python -m src.train --config config/default.yaml \
   data.input_csv=data/raw/SAMPLE.csv \
@@ -169,7 +183,18 @@ python -m src.train --config config/default.yaml \
 
 **Output:** Predicts next-day return (continuous value)
 
-### Example 3: Long Look-Back Window
+### Example 4: Multi-Sentiment Combination
+```bash
+python -m src.train --config config/default.yaml \
+  sentiment.enabled=True \
+  fear_greed.enabled=True \
+  window.size=20
+```
+
+**Output:** Combines daily news sentiment + weekly market psychology  
+**Use case:** Multi-timescale sentiment analysis
+
+### Example 5: Long Look-Back Window
 ```bash
 python -m src.train --config config/default.yaml \
   window.size=20 \
@@ -178,7 +203,7 @@ python -m src.train --config config/default.yaml \
 
 **Use case:** Capture longer-term patterns (e.g., monthly trends)
 
-### Example 4: CNN Model
+### Example 6: CNN Model
 ```bash
 python -m src.train --config config/default.yaml \
   model.type=cnn1d \
@@ -267,7 +292,15 @@ python tests/test_features.py
 - `sent_std_20`: 20-day sentiment volatility
 - `sent_change`: Day-over-day sentiment change
 
+**Fear & Greed Index (Optional, Weekly Market Sentiment):**
+- `fg_raw`: CNN Fear & Greed Index (0=Extreme Fear, 100=Extreme Greed)
+- `fg_change`: Week-over-week change in index
+- `fg_ma_4`: 4-week moving average (monthly trend)
+- `fg_normalized`: Normalized to [-1, 1] range
+
 > **Note:** Features have been optimized to reduce multicollinearity. Highly correlated features (correlation ≥ 0.99) were removed to improve model generalization and reduce overfitting.
+
+> **Fear & Greed Impact:** Adding Fear & Greed Index prevents model collapse and improves test accuracy by 5.2% (33.4% → 38.6%) with 77% precision on positive predictions. See `FEAR_GREED_ANALYSIS.md` for detailed analysis.
 
 ### Time-Series Windowing
 
@@ -294,12 +327,33 @@ Days 2-8   → Predict day 9
 - Fit `StandardScaler` on training data only
 - Transform val/test using training statistics
 
-## Sentiment Data Integration
+## Sentiment & Market Psychology Integration
 
-The pipeline includes built-in support for sentiment data with an optimized feature set:
+The pipeline includes built-in support for sentiment data and market psychology indicators:
 
-### Enabling Sentiment Features
+### 1. Fear & Greed Index (Recommended) 🎯
 
+Weekly market sentiment indicator (0-100 scale) from CNN Business.
+
+**Enabling:**
+```yaml
+# In config/default.yaml
+fear_greed:
+  enabled: true
+  csv_path: "data/raw/Fear and Greed Index Data.csv"
+```
+
+**Features:**
+- `fg_raw`: Raw index (0=Extreme Fear, 100=Extreme Greed)
+- `fg_change`: Week-over-week momentum
+- `fg_ma_4`: 4-week trend
+- `fg_normalized`: Scaled to [-1, 1]
+
+**Impact:** Improves test accuracy by 5.2% and prevents model collapse. See `FEAR_GREED_ANALYSIS.md` for detailed results.
+
+### 2. Daily News Sentiment (Optional)
+
+**Enabling:**
 ```yaml
 # In config/default.yaml
 sentiment:
@@ -307,21 +361,25 @@ sentiment:
   csv_path: "data/raw/Daily News Sentiment Index.csv"
 ```
 
-### Using Sentiment in Training
-
-```python
-# In src/train.py (automatic when sentiment.enabled=true)
-from src.sentiment_stub import load_daily_sentiment
-
-sent_df = load_daily_sentiment(df.index, ticker='^GSPC')
-df_feat = build_stock_features(df, cfg['features'], sent_df=sent_df)
-```
-
-### Sentiment Features (Optimized)
+**Features:**
 - `sent_raw`: Daily sentiment score
 - `sent_ma_5`: 5-day moving average (captures short-term trends)
 - `sent_std_20`: 20-day volatility (measures sentiment stability)
 - `sent_change`: Day-over-day change (momentum signal)
+
+### Integration Example
+
+```python
+# In src/train.py (automatic when enabled in config)
+from src.sentiment_stub import load_daily_sentiment, load_fear_greed_index
+
+# Load both sentiment sources
+sent_df = load_daily_sentiment(df.index, csv_path='...')
+fg_df = load_fear_greed_index(df.index, csv_path='...')
+
+# Merge and build features
+df_feat = build_stock_features(df, cfg['features'], sent_df=sent_df)
+```
 
 See `src/sentiment_stub.py` for integration guide and extension functions.
 

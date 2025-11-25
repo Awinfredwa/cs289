@@ -10,7 +10,8 @@ from ta.trend import MACD
 def build_stock_features(
     df: pd.DataFrame,
     cfg: dict,
-    sent_df: Optional[pd.DataFrame] = None
+    sent_df: Optional[pd.DataFrame] = None,
+    fill_warmup: bool = True
 ) -> pd.DataFrame:
     """
     Build technical features from OHLCV data.
@@ -19,6 +20,8 @@ def build_stock_features(
         df: DataFrame with OHLCV columns and DatetimeIndex
         cfg: Config dict with features section
         sent_df: Optional sentiment DataFrame (for future extension)
+        fill_warmup: If True, forward-fill NaN values from warm-up period
+                     (uses more data but may introduce slight bias)
     
     Returns:
         DataFrame with original OHLCV + engineered features
@@ -30,10 +33,10 @@ def build_stock_features(
     
     # 2. Rolling statistics for close
     for window in cfg['roll_means']:
-        df[f'roll_mean_{window}'] = df['close'].rolling(window=window).mean()
+        df[f'roll_mean_{window}'] = df['close'].rolling(window=window, min_periods=1).mean()
     
     for window in cfg['roll_stds']:
-        df[f'roll_std_{window}'] = df['close'].rolling(window=window).std()
+        df[f'roll_std_{window}'] = df['close'].rolling(window=window, min_periods=1).std()
     
     # 3. RSI
     rsi_period = cfg['rsi_period']
@@ -46,7 +49,8 @@ def build_stock_features(
         close=df['close'],
         window_slow=macd_cfg['slow'],
         window_fast=macd_cfg['fast'],
-        window_sign=macd_cfg['signal']
+        window_sign=macd_cfg['signal'],
+        fillna=True  # Fill NaN values to use more data
     )
     # Keep only macd and macd_hist (signal is redundant with macd)
     df['macd'] = macd.macd()
@@ -55,11 +59,11 @@ def build_stock_features(
     # 5. Volume features
     for window in cfg['volume_windows']:
         if window <= len(df):
-            df[f'vol_roll_mean_{window}'] = df['volume'].rolling(window=window).mean()
+            df[f'vol_roll_mean_{window}'] = df['volume'].rolling(window=window, min_periods=1).mean()
             
             # Volume z-score
-            vol_mean = df['volume'].rolling(window=window).mean()
-            vol_std = df['volume'].rolling(window=window).std()
+            vol_mean = df['volume'].rolling(window=window, min_periods=1).mean()
+            vol_std = df['volume'].rolling(window=window, min_periods=1).std()
             df[f'vol_zscore_{window}'] = (df['volume'] - vol_mean) / (vol_std + 1e-8)
     
     # 6. Optional: Merge sentiment data (for future extension)
@@ -71,9 +75,17 @@ def build_stock_features(
         # Merge on date (left join to keep all stock data)
         df = df.join(sent_df, how='left')
         
-        # Fill missing sentiment with neutral values (0 or median)
+        # Fill missing sentiment with forward-fill, then backward-fill, then 0
         sent_cols = sent_df.columns
-        df[sent_cols] = df[sent_cols].fillna(0)
+        df[sent_cols] = df[sent_cols].ffill().bfill().fillna(0)
+    
+    # Forward-fill remaining NaN values from warm-up if requested
+    if fill_warmup:
+        # Only forward-fill, don't backward-fill (to avoid look-ahead bias)
+        df = df.ffill()
+        # Fill any remaining NaN at the start with 0
+        df = df.fillna(0)
+        print(f"✓ Warm-up NaN values filled (using min_periods=1 for rolling features)")
     
     return df
 
@@ -149,4 +161,3 @@ def get_feature_columns(df: pd.DataFrame, exclude_cols: list = None) -> list:
     feature_cols = [col for col in df.columns if col not in default_exclude]
     
     return feature_cols
-

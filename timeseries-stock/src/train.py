@@ -12,7 +12,8 @@ from src.features import build_stock_features, make_targets, drop_warmup_rows, g
 from src.windows import make_sliding_windows, validate_window_shapes
 from src.dataset import create_dataloaders
 from src.models import create_model
-from src.sentiment_stub import load_daily_sentiment
+from src.sentiment_stub import load_daily_sentiment, load_fear_greed_index
+from src.resample import resample_to_weekly, align_weekly_fear_greed, create_weekly_targets, weekly_summary
 from src.utils import (
     set_seed, load_config, save_config, time_split,
     standardize_features, compute_classification_metrics,
@@ -27,11 +28,13 @@ def train_epoch(model, train_loader, optimizer, criterion, device):
     
     for batch_X, batch_y in train_loader:
         batch_X = batch_X.to(device)
-        batch_y = batch_y.to(device)
+        batch_y = batch_y.to(device).long()  # CrossEntropyLoss expects LongTensor
         
         # Forward pass
         optimizer.zero_grad()
-        outputs = model(batch_X)
+        outputs = model(batch_X)  # (batch, 2) for classification
+        
+        # Calculate loss (CrossEntropyLoss handles everything)
         loss = criterion(outputs, batch_y)
         
         # Backward pass
@@ -57,12 +60,20 @@ def evaluate(model, data_loader, criterion, device, task):
             batch_y = batch_y.to(device)
             
             outputs = model(batch_X)
-            loss = criterion(outputs, batch_y)
+            
+            # For classification, convert targets to long for CrossEntropyLoss
+            if task == 'classification':
+                batch_y_loss = batch_y.long()
+                loss = criterion(outputs, batch_y_loss)
+            else:
+                loss = criterion(outputs, batch_y)
+            
             total_loss += loss.item()
             
             # Collect predictions
             if task == 'classification':
-                preds = (outputs > 0.5).cpu().numpy().astype(int)
+                # For CrossEntropyLoss, take argmax of the 2 outputs
+                preds = torch.argmax(outputs, dim=1).cpu().numpy()
             else:
                 preds = outputs.cpu().numpy()
             
@@ -126,6 +137,16 @@ def main(config_path, overrides=None):
     )
     print(f"Loaded {len(df)} days of data")
     
+    # Check if weekly resampling is enabled
+    use_weekly = cfg['data'].get('use_weekly', False)
+    if use_weekly:
+        print(f"\n📅 Resampling to weekly frequency...")
+        daily_df = df.copy()  # Keep copy for reference
+        df = resample_to_weekly(df, method='ohlc')
+        weekly_summary(daily_df, df)
+    else:
+        print(f"Using daily frequency")
+    
     # ========== 2. Build Features ==========
     print("\n[2/9] Building features...")
     
@@ -141,13 +162,60 @@ def main(config_path, overrides=None):
             print("⚠ Warning: No sentiment data matched stock dates")
             sent_df = None
     
-    df_feat = build_stock_features(df, cfg['features'], sent_df=sent_df)
+    # Load Fear and Greed Index if enabled
+    fg_df = None
+    if cfg.get('fear_greed', {}).get('enabled', False):
+        print("Loading Fear and Greed Index...")
+        fg_csv_path = cfg['fear_greed'].get('csv_path', 'data/raw/Fear and Greed Index Data.csv')
+        
+        if use_weekly:
+            # Weekly mode: load F&G and align directly (no fill needed!)
+            import pandas as pd
+            fg_raw = pd.read_csv(fg_csv_path)
+            fg_raw['Date'] = pd.to_datetime(fg_raw['Date'])
+            fg_raw = fg_raw.set_index('Date').sort_index()
+            fg_raw = fg_raw.rename(columns={'Value': 'fg_raw'})
+            
+            # Create derived features
+            fg_raw['fg_change'] = fg_raw['fg_raw'].diff()
+            fg_raw['fg_ma_4'] = fg_raw['fg_raw'].rolling(window=4, min_periods=1).mean()
+            fg_raw['fg_normalized'] = (fg_raw['fg_raw'] - 50) / 50
+            
+            fg_df = fg_raw
+            print(f"✓ Fear & Greed features (weekly, no filling needed)")
+            print(f"  → Clean alignment: Week N emotion → Week N+1 performance")
+        else:
+            # Daily mode: use fill method
+            shift_days = cfg['fear_greed'].get('shift_days', 0)
+            fg_df = load_fear_greed_index(df.index, csv_path=fg_csv_path, shift_days=shift_days)
+            if len(fg_df) > 0:
+                print(f"✓ Fear & Greed features will be added ({len(fg_df.columns)} features)")
+            else:
+                print("⚠ Warning: No Fear & Greed data matched stock dates")
+                fg_df = None
+    
+    # Merge sentiment and Fear & Greed into single sentiment DataFrame
+    if sent_df is not None and fg_df is not None:
+        sent_df = sent_df.join(fg_df, how='outer')
+    elif fg_df is not None:
+        sent_df = fg_df
+    
+    # Build features with optional warm-up filling
+    fill_warmup = cfg['features'].get('fill_warmup', True)
+    df_feat = build_stock_features(df, cfg['features'], sent_df=sent_df, fill_warmup=fill_warmup)
     
     # ========== 3. Create Targets ==========
     print("\n[3/9] Creating targets...")
     horizon = cfg['data'].get('prediction_horizon', 1)
-    print(f"Prediction horizon: {horizon} days ({'next day' if horizon == 1 else f'next week' if horizon == 5 else f'{horizon} days ahead'})")
-    df_feat = make_targets(df_feat, mode=cfg['data']['target'], horizon=horizon)
+    
+    if use_weekly:
+        freq_str = f"{'next week' if horizon == 1 else f'{horizon} weeks ahead'}"
+        print(f"Prediction horizon: {horizon} weeks ({freq_str})")
+        df_feat = create_weekly_targets(df_feat, mode=cfg['data']['target'], horizon=horizon)
+    else:
+        freq_str = f"{'next day' if horizon == 1 else f'{horizon} days ahead'}"
+        print(f"Prediction horizon: {horizon} days ({freq_str})")
+        df_feat = make_targets(df_feat, mode=cfg['data']['target'], horizon=horizon)
     
     # ========== 4. Drop Warm-up Rows ==========
     print("\n[4/9] Dropping warm-up rows...")
@@ -171,8 +239,9 @@ def main(config_path, overrides=None):
     print(f"{'='*70}")
     
     # Categorize features
-    tech_features = [f for f in feature_cols if not f.startswith('sent_')]
+    tech_features = [f for f in feature_cols if not f.startswith('sent_') and not f.startswith('fg_')]
     sent_features = [f for f in feature_cols if f.startswith('sent_')]
+    fg_features = [f for f in feature_cols if f.startswith('fg_')]
     
     print(f"\n📊 Technical Features ({len(tech_features)}):")
     for i, feat in enumerate(tech_features, 1):
@@ -186,6 +255,14 @@ def main(config_path, overrides=None):
             print(f"  {i:2d}. {feat:20s} | Mean: {values.mean():8.4f} | Std: {values.std():7.4f} | Range: [{values.min():7.3f}, {values.max():7.3f}]")
     else:
         print(f"\n🎭 Sentiment Features: None (disabled)")
+    
+    if fg_features:
+        print(f"\n😨😁 Fear & Greed Features ({len(fg_features)}):")
+        for i, feat in enumerate(fg_features, 1):
+            values = df_feat[feat]
+            print(f"  {i:2d}. {feat:20s} | Mean: {values.mean():8.4f} | Std: {values.std():7.4f} | Range: [{values.min():7.3f}, {values.max():7.3f}]")
+    else:
+        print(f"\n😨😁 Fear & Greed Features: None (disabled)")
     
     # Show sample data
     print(f"\n📋 Sample Feature Values (first 5 days after split):")
@@ -206,6 +283,48 @@ def main(config_path, overrides=None):
     X_test = test_df[feature_cols].values
     y_test = test_df['target'].values
     
+    # Get task before class distribution analysis
+    task = cfg['train']['task']
+    
+    # ========== CLASS DISTRIBUTION ANALYSIS ==========
+    print(f"\n{'='*70}")
+    print("CLASS DISTRIBUTION ANALYSIS")
+    print(f"{'='*70}")
+    
+    if task == 'classification':
+        train_class_0 = (y_train == 0).sum()
+        train_class_1 = (y_train == 1).sum()
+        val_class_0 = (y_val == 0).sum()
+        val_class_1 = (y_val == 1).sum()
+        test_class_0 = (y_test == 0).sum()
+        test_class_1 = (y_test == 1).sum()
+        
+        print(f"\n📊 Train Set:")
+        print(f"  Class 0 (Down): {train_class_0:4d} ({train_class_0/len(y_train)*100:5.1f}%)")
+        print(f"  Class 1 (Up):   {train_class_1:4d} ({train_class_1/len(y_train)*100:5.1f}%)")
+        print(f"  Ratio (1:0):    {train_class_1/max(train_class_0,1):.2f}")
+        
+        print(f"\n📊 Validation Set:")
+        print(f"  Class 0 (Down): {val_class_0:4d} ({val_class_0/len(y_val)*100:5.1f}%)")
+        print(f"  Class 1 (Up):   {val_class_1:4d} ({val_class_1/len(y_val)*100:5.1f}%)")
+        print(f"  Ratio (1:0):    {val_class_1/max(val_class_0,1):.2f}")
+        
+        print(f"\n📊 Test Set:")
+        print(f"  Class 0 (Down): {test_class_0:4d} ({test_class_0/len(y_test)*100:5.1f}%)")
+        print(f"  Class 1 (Up):   {test_class_1:4d} ({test_class_1/len(y_test)*100:5.1f}%)")
+        print(f"  Ratio (1:0):    {test_class_1/max(test_class_0,1):.2f}")
+        
+        # Calculate class weights for balancing
+        from sklearn.utils.class_weight import compute_class_weight
+        class_weights_array = compute_class_weight('balanced', classes=np.array([0, 1]), y=y_train)
+        class_weights = {0: class_weights_array[0], 1: class_weights_array[1]}
+        
+        print(f"\n⚖️ Suggested Class Weights (for balanced training):")
+        print(f"  Class 0: {class_weights[0]:.3f}")
+        print(f"  Class 1: {class_weights[1]:.3f}")
+        
+    print(f"\n{'='*70}\n")
+    
     # ========== 6. Build Sliding Windows ==========
     print("\n[6/9] Building sliding windows...")
     window_size = cfg['window']['size']
@@ -225,7 +344,7 @@ def main(config_path, overrides=None):
     
     # ========== 8. Create DataLoaders ==========
     print("\n[8/9] Creating DataLoaders...")
-    task = cfg['train']['task']
+    # task already defined above
     train_loader, val_loader, test_loader = create_dataloaders(
         X_train_scaled, y_train_win,
         X_val_scaled, y_val_win,
@@ -248,10 +367,20 @@ def main(config_path, overrides=None):
     
     print(f"Model: {cfg['model']['type'].upper()}")
     print(f"Parameters: {sum(p.numel() for p in model.parameters()):,}")
+    if task == 'classification':
+        print(f"Output: 2 neurons (for CrossEntropyLoss)")
     
     # ========== Loss & Optimizer ==========
     if task == 'classification':
-        criterion = nn.BCELoss()
+        # Use CrossEntropyLoss with class weights to handle imbalance
+        if 'class_weights' in locals():
+            weight_tensor = torch.tensor([class_weights[0], class_weights[1]], dtype=torch.float32).to(device)
+            criterion = nn.CrossEntropyLoss(weight=weight_tensor)
+            print(f"Using CrossEntropyLoss with class weights: [{weight_tensor[0].item():.3f}, {weight_tensor[1].item():.3f}]")
+            print(f"  (Class 0 weight={class_weights[0]:.3f}, Class 1 weight={class_weights[1]:.3f})")
+        else:
+            criterion = nn.CrossEntropyLoss()
+            print(f"Using CrossEntropyLoss (no class weights)")
     else:
         criterion = nn.MSELoss()
     
