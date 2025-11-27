@@ -292,10 +292,10 @@ python tests/test_features.py
 - `sent_std_20`: 20-day sentiment volatility
 - `sent_change`: Day-over-day sentiment change
 
-**Fear & Greed Index (Optional, Weekly Market Sentiment):**
+**Fear & Greed Index (Optional, Daily Interpolated Market Sentiment):**
 - `fg_raw`: CNN Fear & Greed Index (0=Extreme Fear, 100=Extreme Greed)
-- `fg_change`: Week-over-week change in index
-- `fg_ma_4`: 4-week moving average (monthly trend)
+- `fg_change`: Day-over-day change in index
+- `fg_ma_4`: 4-day moving average
 - `fg_normalized`: Normalized to [-1, 1] range
 
 > **Note:** Features have been optimized to reduce multicollinearity. Highly correlated features (correlation ≥ 0.99) were removed to improve model generalization and reduce overfitting.
@@ -333,23 +333,28 @@ The pipeline includes built-in support for sentiment data and market psychology 
 
 ### 1. Fear & Greed Index (Recommended) 🎯
 
-Weekly market sentiment indicator (0-100 scale) from CNN Business.
+Daily interpolated market sentiment indicator (0-100 scale) from CNN Business.
 
 **Enabling:**
 ```yaml
 # In config/default.yaml
 fear_greed:
   enabled: true
-  csv_path: "data/raw/Fear and Greed Index Data.csv"
+  csv_path: "data/raw/Fear and Greed Index Data - Daily Interpolated.csv"
 ```
 
 **Features:**
 - `fg_raw`: Raw index (0=Extreme Fear, 100=Extreme Greed)
-- `fg_change`: Week-over-week momentum
-- `fg_ma_4`: 4-week trend
+- `fg_change`: Day-over-day momentum
+- `fg_ma_4`: 4-day trend
 - `fg_normalized`: Scaled to [-1, 1]
 
-**Impact:** Improves test accuracy by 5.2% and prevents model collapse. See `FEAR_GREED_ANALYSIS.md` for detailed results.
+**Setup:** Generate daily interpolated data from weekly values:
+```bash
+python scripts/interpolate_fear_greed.py
+```
+
+**Impact:** Improves test accuracy by 5.2% and prevents model collapse.
 
 ### 2. Daily News Sentiment (Optional)
 

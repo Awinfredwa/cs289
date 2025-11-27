@@ -147,31 +147,51 @@ def compute_classification_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Di
 
 def compute_regression_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, float]:
     """
-    Compute regression metrics.
+    Compute regression metrics for stock prediction.
+    
+    Includes both regression metrics (MAE, RMSE) and trading-critical
+    directional metrics (accuracy, precision, recall, F1).
     
     Args:
-        y_true: True values
-        y_pred: Predicted values
+        y_true: True values (returns)
+        y_pred: Predicted values (returns)
     
     Returns:
         Dictionary of metrics
     """
+    # Standard regression metrics
     mae = mean_absolute_error(y_true, y_pred)
     mse = mean_squared_error(y_true, y_pred)
     rmse = np.sqrt(mse)
     
-    # MAPE (Mean Absolute Percentage Error) - handle division by zero
-    mask = y_true != 0
-    if mask.sum() > 0:
-        mape = np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100
+    # Correlation - how well predictions track actuals
+    if len(y_true) > 1 and np.std(y_true) > 0 and np.std(y_pred) > 0:
+        correlation = np.corrcoef(y_true.flatten(), y_pred.flatten())[0, 1]
     else:
-        mape = np.nan
+        correlation = np.nan
+    
+    # CRITICAL FOR TRADING: Directional accuracy
+    # Convert returns to direction (1 = up, 0 = down)
+    pred_direction = (y_pred > 0).astype(int).flatten()
+    true_direction = (y_true > 0).astype(int).flatten()
+    
+    # Directional accuracy (most important for trading!)
+    directional_accuracy = (pred_direction == true_direction).mean()
+    
+    # Trading metrics: treat as classification problem
+    # If we get direction right, we make money!
+    dir_precision = precision_score(true_direction, pred_direction, zero_division=0)
+    dir_recall = recall_score(true_direction, pred_direction, zero_division=0)
+    dir_f1 = f1_score(true_direction, pred_direction, zero_division=0)
     
     metrics = {
         'mae': mae,
-        'mse': mse,
         'rmse': rmse,
-        'mape': mape,
+        'correlation': correlation,
+        'dir_accuracy': directional_accuracy,  # MOST IMPORTANT!
+        'dir_precision': dir_precision,
+        'dir_recall': dir_recall,
+        'dir_f1': dir_f1,
     }
     
     return metrics

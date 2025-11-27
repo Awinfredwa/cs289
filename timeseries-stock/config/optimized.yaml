@@ -1,0 +1,67 @@
+# Optimized configuration based on correlation analysis
+# 
+# Key findings:
+# - Sentiment features are BEST predictors (r = -0.177)
+# - MACD histogram is strong (r = 0.153)
+# - F&G CHANGE is useful (r = 0.138), but F&G RAW is weak (r = 0.055)
+# - Only 4 features have strong signal - keep model simple
+
+data:
+  input_csv: "data/raw/SAMPLE.csv"
+  date_col: "date"
+  cols: ["open", "high", "low", "close", "volume"]
+  target: "return"
+  prediction_horizon: 5  # Predict 5-day cumulative return (day 6-10)
+  cache_processed: true
+
+sentiment:
+  enabled: true  # KEEP - Best predictor! (r = -0.177)
+  csv_path: "data/raw/Daily News Sentiment Index.csv"
+
+fear_greed:
+  enabled: true  # KEEP for fg_change feature (r = 0.138)
+  csv_path: "data/raw/Fear and Greed Index Data - Daily Interpolated.csv"
+
+features:
+  rsi_period: 14
+  roll_means: [5, 20]      # Keep both (r = -0.06 to -0.07)
+  roll_stds: [10]          # Low correlation but may help
+  macd:
+    fast: 12
+    slow: 26
+    signal: 9              # KEEP - MACD histogram is 2nd best (r = 0.153)
+  volume_windows: [20]     # Keep (r = -0.077)
+
+window:
+  size: 5  # Balanced: 5 days in, 5 days out (predict return of days 6-10)
+  stride: 1
+
+split:
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+  chronological: true
+
+model:
+  type: "lstm"
+  hidden_size: 48  # Reduced from 64 - simpler model for limited signal
+  num_layers: 2
+  dropout: 0.2
+
+train:
+  epochs: 150
+  batch_size: 64  # Increased from 32 - more stable gradients
+  lr: 0.001  # Keep higher LR for learning
+  optimizer: "adam"
+  early_stop_patience: 25
+  task: "regression"
+  seed: 188877
+  weight_decay: 0.0005  # Reduced further - let model use weak signals
+  
+  # Loss function - emphasize direction since correlations are weak
+  loss_function: "direction_mse"
+  direction_weight: 0.7  # Increased! With weak signals, direction matters more
+
+paths:
+  outdir: "artifacts/"
+

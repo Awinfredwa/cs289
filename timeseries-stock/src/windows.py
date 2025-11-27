@@ -24,11 +24,13 @@ def make_sliding_windows(
         y_win: Array of shape (num_samples,)
     
     Example:
-        If X has 100 days and window_size=7, we get 94 samples.
-        Sample 0: days [0:7] -> predict day 7
-        Sample 1: days [1:8] -> predict day 8
+        If X has 100 days, window_size=7, and y[i] represents a 1-day ahead target:
+        - Sample 0: days [0:7] -> predict y[7] (target for day 7, which predicts day 8)
+        - Sample 1: days [1:8] -> predict y[8] (target for day 8, which predicts day 9)
         ...
-        Sample 93: days [93:100] -> predict day 100
+        - Sample 92: days [92:99] -> predict y[99] (target for day 99, which predicts day 100)
+        
+        This ensures NO overlap: window ends at day 6, target y[7] predicts day 8.
     """
     num_days, num_features = X.shape
     
@@ -36,7 +38,9 @@ def make_sliding_windows(
         raise ValueError(f"window_size ({window_size}) cannot exceed number of days ({num_days})")
     
     # Calculate number of windows
-    num_samples = (num_days - window_size) // stride + 1
+    # We need at least window_size + 1 days to create 1 sample
+    # (window_size days for input, +1 for the target which comes after)
+    num_samples = (num_days - window_size) // stride
     
     if num_samples <= 0:
         raise ValueError(f"Not enough data for windowing: num_days={num_days}, window_size={window_size}")
@@ -50,11 +54,12 @@ def make_sliding_windows(
         start_idx = i * stride
         end_idx = start_idx + window_size
         
-        # Features from [start_idx:end_idx]
+        # Features from [start_idx:end_idx] (e.g., days 0-19 for window_size=20)
         X_win[i] = X[start_idx:end_idx]
         
-        # Target is at end_idx (the day after the window)
-        y_win[i] = y[end_idx - 1]
+        # Target is at end_idx (the day AFTER the window ends)
+        # This ensures no overlap between input window and target
+        y_win[i] = y[end_idx]
     
     return X_win, y_win
 

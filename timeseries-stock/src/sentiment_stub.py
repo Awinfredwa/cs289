@@ -134,13 +134,11 @@ def fetch_news_sentiment(ticker: str, start_date: str, end_date: str) -> pd.Data
 
 
 def load_fear_greed_index(dates: pd.DatetimeIndex, 
-                          csv_path: str = "data/raw/Fear and Greed Index Data.csv",
-                          fill_method: str = 'bfill',
-                          shift_days: int = 0) -> pd.DataFrame:
+                          csv_path: str = "data/raw/Fear and Greed Index Data - Daily Interpolated.csv") -> pd.DataFrame:
     """
-    Load Fear and Greed Index data and align with daily stock dates.
+    Load daily interpolated Fear and Greed Index data and align with stock dates.
     
-    The Fear and Greed Index is weekly data (0-100 scale):
+    The Fear and Greed Index is a daily interpolated market sentiment indicator (0-100 scale):
     - 0-25: Extreme Fear
     - 25-45: Fear  
     - 45-55: Neutral
@@ -149,86 +147,48 @@ def load_fear_greed_index(dates: pd.DatetimeIndex,
     
     Args:
         dates: DatetimeIndex of daily trading days
-        csv_path: Path to Fear and Greed Index CSV file
-        fill_method: 'bfill' (default) or 'ffill'
-            - 'bfill': Week N's F&G (published on day D) applies to days BEFORE day D
-                       → Jan 7 F&G (representing Jan 1-7 emotion) applies to Jan 1-7 features
-                       → These features predict future targets based on that week's emotion
-            - 'ffill': Week N's F&G applies to days AFTER day D
-        shift_days: Number of days to shift the F&G data forward (default: 0)
-            - shift_days=0: Jan 7 F&G → predicts Jan 7+horizon target
-            - shift_days=N: Jan 7 F&G → predicts Jan 7-N+horizon target
-            - For perfect alignment with weekly prediction: set shift_days = -prediction_horizon
-              (e.g., shift_days=-5 makes Jan 7 F&G predict Jan 7-14 performance)
+        csv_path: Path to daily interpolated Fear and Greed Index CSV file
     
     Returns:
         DataFrame with DatetimeIndex and fear/greed features:
             - fg_raw: Raw fear/greed index (0-100)
-            - fg_change: Week-over-week change in index
-            - fg_ma_4: 4-week moving average (monthly trend)
+            - fg_change: Day-over-day change in index
+            - fg_ma_4: 4-day moving average
             - fg_normalized: Normalized to [-1, 1] range (0 = neutral, -1 = extreme fear, 1 = extreme greed)
     
-    Example with 5-day prediction horizon and backward-fill:
-        Jan 7: F&G=63 published (represents Jan 1-7 emotion)
-        → Jan 1-6: features use F&G=63 (backward-fill)
-        → Jan 7: features use F&G=63
-        → Jan 1-7 features predict Jan 6-12 targets (5 days ahead)
-        → Result: Jan 1-7 emotion (published Jan 7) → predicts next week ✓
+    Note: Use scripts/interpolate_fear_greed.py to generate daily interpolated data
+          from the original weekly Fear & Greed Index CSV.
     """
     import os
     
     # Check if file exists
     if not os.path.exists(csv_path):
         print(f"Warning: Fear and Greed Index file not found at {csv_path}")
+        print(f"  Run: python scripts/interpolate_fear_greed.py")
         return pd.DataFrame(index=dates)
     
-    # Load Fear and Greed Index CSV
-    fg_raw = pd.read_csv(csv_path)
+    # Load daily interpolated Fear and Greed Index CSV
+    fg_daily = pd.read_csv(csv_path)
     
     # Parse dates (format: YYYY-MM-DD)
-    fg_raw['Date'] = pd.to_datetime(fg_raw['Date'])
-    fg_raw = fg_raw.set_index('Date').sort_index()
+    fg_daily['Date'] = pd.to_datetime(fg_daily['Date'])
+    fg_daily = fg_daily.set_index('Date').sort_index()
     
     # Rename column for clarity
-    fg_raw = fg_raw.rename(columns={'Value': 'fg_raw'})
+    fg_daily = fg_daily.rename(columns={'Value': 'fg_raw'})
     
-    # Create derived features BEFORE reindexing to daily
-    fg_raw['fg_change'] = fg_raw['fg_raw'].diff()
-    fg_raw['fg_ma_4'] = fg_raw['fg_raw'].rolling(window=4, min_periods=1).mean()
+    # Create derived features
+    fg_daily['fg_change'] = fg_daily['fg_raw'].diff()
+    fg_daily['fg_ma_4'] = fg_daily['fg_raw'].rolling(window=4, min_periods=1).mean()
     
     # Normalize to [-1, 1] range (50 = 0, 0 = -1, 100 = 1)
-    fg_raw['fg_normalized'] = (fg_raw['fg_raw'] - 50) / 50
-    
-    # Fill to daily frequency
-    # Backward-fill: Week N's F&G (published day D) applies to days before D
-    #   → Jan 7 F&G (representing Jan 1-7 emotion) applies to Jan 1-7
-    # Forward-fill: Week N's F&G applies to days after D
-    #   → Jan 7 F&G applies to Jan 7-13
-    all_dates = pd.date_range(start=fg_raw.index.min(), end=dates.max(), freq='D')
-    fg_daily = fg_raw.reindex(all_dates, method=fill_method)
-    
-    # Apply shift if requested
-    # Negative shift = shift backward in time (earlier dates get later F&G values)
-    # This aligns "week N emotion → week N+1 performance"
-    if shift_days != 0:
-        fg_daily = fg_daily.shift(shift_days)
+    fg_daily['fg_normalized'] = (fg_daily['fg_raw'] - 50) / 50
     
     # Align with requested stock dates
     fg_aligned = fg_daily.loc[fg_daily.index.isin(dates)]
     
-    # Determine causality direction
-    if fill_method == 'bfill':
-        causality = "Week N emotion (published day D) → applies to days before D"
-    else:
-        causality = "Week N emotion (published day D) → applies to days after D"
-    
-    if shift_days != 0:
-        shift_info = f" | Shift: {shift_days} days ({'earlier dates get later F&G' if shift_days < 0 else 'later dates get later F&G'})"
-    else:
-        shift_info = ""
-    
     print(f"✓ Loaded Fear & Greed Index: {len(fg_aligned)}/{len(dates)} days matched")
-    print(f"  Fill method: {fill_method} ({causality}){shift_info}")
+    print(f"  Daily interpolated data (smooth transitions)")
     print(f"  Index range: [{fg_aligned['fg_raw'].min():.0f}, {fg_aligned['fg_raw'].max():.0f}]")
     print(f"  Mean index: {fg_aligned['fg_raw'].mean():.1f} ({'Neutral' if 45 <= fg_aligned['fg_raw'].mean() <= 55 else 'Greed' if fg_aligned['fg_raw'].mean() > 55 else 'Fear'})")
     

@@ -1,0 +1,59 @@
+data:
+  input_csv: "data/raw/SAMPLE.csv"
+  date_col: "date"
+  cols: ["open", "high", "low", "close", "volume"]
+  target: "return"
+  prediction_horizon: 5
+  cache_processed: true
+
+sentiment:
+  enabled: true
+  csv_path: "data/raw/Daily News Sentiment Index.csv"
+
+fear_greed:
+  enabled: true
+  csv_path: "data/raw/Fear and Greed Index Data - Daily Interpolated.csv"
+
+features:
+  rsi_period: 14
+  roll_means: [5, 20]
+  roll_stds: [10]
+  macd:
+    fast: 12
+    slow: 26
+    signal: 9
+  volume_windows: [20]
+
+window:
+  size: 5  # Balanced: 5 days in, predict return of next 5 days (days 6-10)
+  stride: 1
+
+split:
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+  chronological: true
+
+model:
+  type: "lstm"
+  hidden_size: 64
+  num_layers: 2
+  dropout: 0.2  # Reduced from 0.3 - less aggressive dropout
+
+train:
+  epochs: 200
+  batch_size: 32
+  lr: 0.001  # INCREASED 10x: was 0.0001, now 0.001
+  optimizer: "adam"
+  early_stop_patience: 30  # Increased: give model more time to learn
+  task: "regression"
+  seed: 188877
+  weight_decay: 0.001  # REDUCED 10x: was 0.01, now 0.001 (less regularization)
+  
+  # Loss function configuration
+  loss_function: "direction_mse"  # Changed from huber_direction
+  direction_weight: 0.5  # INCREASED 10x: was 0.05, now 0.5 (penalize wrong direction!)
+
+paths:
+  outdir: "artifacts/"
+

@@ -1,0 +1,68 @@
+# Minimal feature set - only use features with proven correlation
+#
+# This config focuses ONLY on features with |r| > 0.10:
+# 1. Sentiment (raw, ma_5) - r = -0.177 ⭐⭐⭐
+# 2. MACD histogram - r = 0.153 ⭐⭐
+# 3. F&G change - r = 0.138 ⭐
+#
+# Hypothesis: Fewer, better features = easier learning
+
+data:
+  input_csv: "data/raw/SAMPLE.csv"
+  date_col: "date"
+  cols: ["open", "high", "low", "close", "volume"]
+  target: "return"
+  prediction_horizon: 1  # Next-day prediction (simpler task)
+  cache_processed: true
+
+sentiment:
+  enabled: true  # ✅ BEST FEATURE (r = -0.177)
+  csv_path: "data/raw/Daily News Sentiment Index.csv"
+
+fear_greed:
+  enabled: true  # Only for fg_change (r = 0.138)
+  csv_path: "data/raw/Fear and Greed Index Data - Daily Interpolated.csv"
+
+features:
+  rsi_period: 14
+  roll_means: []           # REMOVED - weak correlation
+  roll_stds: []            # REMOVED - weak correlation
+  macd:
+    fast: 12
+    slow: 26
+    signal: 9              # ✅ KEEP MACD histogram (r = 0.153)
+  volume_windows: []       # REMOVED - weak correlation
+
+window:
+  size: 5  # Short window - testing if less history works
+  stride: 1
+
+split:
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+  chronological: true
+
+model:
+  type: "lstm"
+  hidden_size: 32  # Small model - only 6-7 features
+  num_layers: 1    # Single layer - prevent overfitting
+  dropout: 0.1     # Minimal dropout
+
+train:
+  epochs: 100
+  batch_size: 64
+  lr: 0.00001 # Higher LR - faster learning with fewer features
+  optimizer: "adam"
+  early_stop_patience: 20
+  task: "regression"
+  seed: 22223
+  weight_decay: 0.0001  # Very low regularization
+  
+  # Direction loss with high weight - correlations are weak, focus on direction
+  loss_function: "direction_mse"
+  direction_weight: 1.0  # Equal weight to MSE and direction!
+
+paths:
+  outdir: "artifacts/"
+

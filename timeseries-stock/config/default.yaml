@@ -2,19 +2,17 @@ data:
   input_csv: "data/raw/SAMPLE.csv"  # Use SAMPLE.csv for testing, replace with your data
   date_col: "date"
   cols: ["open", "high", "low", "close", "volume"]
-  target: "direction"   # options: "direction" | "return"
-  prediction_horizon: 1  # For weekly: 1=next week, 2=2 weeks ahead, etc.
+  target: "return"   # options: "direction" | "return"
+  prediction_horizon: 5  # days ahead to predict (1=next day, 5=next week)
   cache_processed: true
-  use_weekly: true  # Resample to weekly frequency (recommended with Fear & Greed)
 
 sentiment:
-  enabled: false  # Disable daily sentiment (doesn't align well with weekly data)
+  enabled: false # Set to true to include sentiment features
   csv_path: "data/raw/Daily News Sentiment Index.csv"
 
 fear_greed:
-  enabled: true  # Weekly Fear & Greed Index aligns perfectly with weekly stock data
-  csv_path: "data/raw/Fear and Greed Index Data.csv"
-  shift_days: 0  # No shift needed with weekly data
+  enabled: true  # Set to true to include Fear & Greed Index features
+  csv_path: "data/raw/Fear and Greed Index Data - Daily Interpolated.csv"
 
 features:
   rsi_period: 14
@@ -25,10 +23,9 @@ features:
     slow: 26
     signal: 9
   volume_windows: [20]     # Keep medium-term only, drop redundant 5 and 50
-  fill_warmup: true        # Forward-fill NaN from warm-up to use more data (recommended)
 
 window:
-  size: 8  # For weekly: 8 weeks (2 months) look-back
+  size: 10  # 20 days (4 weeks) look-back for weekly prediction
   stride: 1
 
 split:
@@ -38,19 +35,25 @@ split:
   chronological: true
 
 model:
-  type: "cnn1d"          # CNN works well for pattern recognition in weekly data
-  hidden_size: 32
-  num_layers: 1
-  dropout: 0.3
+  type: "lstm"           # options: "lstm" | "cnn1d"
+  hidden_size: 64
+  num_layers: 2
+  dropout: 0.5
 
 train:
-  epochs: 30
-  batch_size: 16
-  lr: 0.0001
+  epochs: 200
+  batch_size: 32
+  lr: 0.00001
   optimizer: "adam"
-  early_stop_patience: 10 # Slightly more patience for weekly prediction
-  task: "classification" # or "regression"
+  early_stop_patience: 20
+  task: "classification"
   seed: 32
+
+  weight_decay: 0.01  # L2 regularization
+  
+  # Loss function configuration
+  loss_function: "huber_direction"  # options: "mse", "direction_mse", "weighted_direction_mse", "huber_direction"
+  direction_weight: 1  # Weight for directional penalty (higher = more emphasis on direction)
 
 paths:
   outdir: "artifacts/"
